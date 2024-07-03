@@ -7,12 +7,12 @@ nav:
 asciidoc:
   attributes:
     lab_name: "Convert to RHEL"
-    release-version: master
+    release-version: main
     page-pagination: true
     my_var: "foo"
     guid: my-guid
-    ssh_user: ec2-user
-    ssh_password: devops
+    ssh_user: devops
+    ssh_password: "{{ common_password }}"
     ssh_command: ssh ec2-user@bastion.{guid}.example.opentlc.com
     page-links:
     - url: https://redhat.com
