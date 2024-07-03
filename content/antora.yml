@@ -1,20 +1,19 @@
 name: modules
 title: Default Title
-version: master
+version: main
 nav:
-  - modules/ROOT/nav.adoc
+  - modules/ROOT/pages/module-01.adoc
 
 asciidoc:
   attributes:
-    lab_name: "I'm the lab_name var"
+    lab_name: "Convert to RHEL"
     release-version: master
     page-pagination: true
     my_var: "foo"
     guid: my-guid
-    ssh_user: devops
+    ssh_user: ec2-user
     ssh_password: devops
-    ssh_command: ssh devops@bastion.{guid}.example.opentlc.com
+    ssh_command: ssh ec2-user@bastion.{guid}.example.opentlc.com
     page-links:
     - url: https://redhat.com
       text: Red Hat
-      

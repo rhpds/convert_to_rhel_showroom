@@ -1,149 +1,420 @@
-= Building an Application with rpms
+:numbered:
+:web_app: http://{web_app_url}
 
-== Downloading the UBI
+= Convert to RHEL with Azure Arc
 
-In this lab, you will be installing software into the container 
-image running as an interactive application. To do this you will
-need `yum`, but do not need `systemd` for managing services within the
-container environment.  For that reason, you will be using the *Standard*
-UBI image (as opposed to the Minimal or Multi-service images).
+== Overview
+In this workshop you will convert a Centos 7 system into a Red Hat Enterprise Linux 7 system.
 
-Using the "buildah from" command will download and meld the container image. This particular image we are using is the Red Hat Universal Base Image or UBI. From the ourput of the command, you will notice that we are pulling down the latest one, which is for RHEL 9. 
+This lab has two Centos VMs: One Apache and one Mysql.
 
-. Execute the  download the Standard UBI
-image from Red Hat's registry.
+In this lab you will:
+
+* Install the Azure Arc client on the Web Server/Bastion Centos VM
+* Convert2Rhel Web Server/Bastion Centos VM
+* Reboot Web Server/Bastion VM
+* Use Ansible to install Azure Arc client on the Mysql Centos VM
+* Use Ansible to Convert2Rhel the CentOS VM
+* Use Ansible to Reboot Mysql VM
+* Use Ansible to Validate Mysql VM is RHEL
+* Validate the Web App still works
+* Discuss security and conversion technical issues
+
+== Verify the Web App is Running
+
+. Browse to {web_app}[Sample Web App^] to verify the web app is running.
++
+.Sample Output
++
+image::Northwind_Sample_Data.jpg[align=center]
+
+== Lab Access Web Server
+
+. Access your *httpd server VM* with the following command.
++
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_command}
+----
++
+
+NOTE: Accept the fingerprint when connecting by typing yes and pressing enter. You may see the message "Failed to add the host to the list of known hosts". This message can be ignored, proceed to enter the password below to connect to the server as the user devops.
+
+. Enter `devops` user password
+
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_password}
+----
+
+== Run Azure Arc Setup Commands on Web Server/Bastion
+
+Azure Arc enables the managment and monitoring of infrastrucutre such as RHEL Servers and OpenShift deployemnts that are deployed on-premsies or in mulit-cloud enviroments.
+For this lab we pre-created the installation script using a service principal that will connect the AWS VM to Azure Arc.
+Once the script is executed, the connected VM will display in the Azure portal.
+
+. Connect your VM to Azure Arc
++
+.. Switch to root user.
++
+[source,bash,role=execute]
+----
+sudo -i
+----
+
+.. Change into the home directory of root
++
+[source,bash,role=execute]
+----
+cd /root
+----
+
+.. Execute the Arc connection sript named deploy_arc.sh
++
+[source,bash,role=execute]
+----
+./deploy_arc.sh
+----
+
+The azcmagent-1.39.02628-1431.x86_64 will be installed and the VM Arc resource will be associated with the resource group called RedHatSummmit2024.
+You can verify the agent and its dependencies are installed in the /opt/azcmagent/bin folder.
+
+=== Verify the Web App is Running After Arc Installation
+
+. Browse to {web_app}[Sample Web App^] to verify the web app is running.
++
+.Web App is Running
++
+image::Northwind_Sample_Data.jpg[align=center]
+
+== Run the Convert2RHEL Commands on Web Server/Bastion
+
+Now we'll actually do the Centos to RHEL conversion. Keep in mind to use elevated privileges.
+
+NOTE: Verify that you are still on the bastion server as root, you can use the `whoami` and `hostname` commands to ensure you are on the correct server and user. 
+If not use the steps below.
+
+. Access your *httpd server VM* with the following command.
++
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_command}
+----
++
+
+. Enter `devops` user password
+
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_password}
+----
+
+.. Switch to root user.
++
+[source,bash,role=execute]
+----
+sudo -i
+----
+
+=== Enabling the Convert2RHEL Repository on The Web Server/Bastion
+
+The Convert2RHEL RPM is an offical Red Hat package.
+Therefore it is readily availble from the Red Hat software repository (CDN).
+As your CentOS server is not subscribed to the Red Hat CDN, you will need to enable the Convert2RHEL repository.
+
+. Get the GPG signing key
++
+[source,bash,role=execute]
+----
+curl -o /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release https://www.redhat.com/security/data/fd431d51.txt
+----
+
+. Download the SSL certificate
++
+[source,bash,role=execute]
+----
+curl --create-dirs -o /etc/rhsm/ca/redhat-uep.pem https://ftp.redhat.com/redhat/convert2rhel/redhat-uep.pem
+----
+
+. Download the convert2rhel repository file
++
+[source,bash,role=execute]
+----
+curl -o /etc/yum.repos.d/convert2rhel.repo https://ftp.redhat.com/redhat/convert2rhel/7/convert2rhel.repo
+----
+
+=== Installing the Convert2RHEL Utility
+
+Now that the requisite repository is enabled on your CentOS Linux system, it is time to install the Convert2RHEL utility and prepare the system for conversion.
+
+. Before you begin the installation process, verify that you are running CentOS Linux and on the latest minor version.
++
+[source,bash,role=execute]
+----
+cat /etc/centos-release
+----
+
+. Verify that the Convert2RHEL repo is enabled.
++
+[source,bash,role=execute]
+----
+yum repolist
+----
+
+. Install the convert2rhel utility.
++
+[source,bash,role=execute]
+----
+yum install -y convert2rhel
+----
+
+== Run the Convert2RHEL Utility
+
+NOTE: Verify that you are still on the bastion server as root, you can use the `whoami` and `hostname` commands to ensure you are on the correct server and user. 
+If not use the steps below.
+
+Access your *httpd server VM* with the following command.
+
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_command}
+----
+
+Enter `devops` user password
+
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_password}
+----
+
+Switch to root user.
+
+[source,bash,role=execute]
+----
+sudo -i
+----
+
+
+. Before running the Convert2RHEL utility for this lab, you need to tell it to ignore the unknown or incompatible kernel modules.
+The Microsoft kernel modules are not known to the conversion system.
+Execute the following to put the override flag into your environment permanently.
+Once again ensure you are on the correct server and have elevated privileges.
+
+NOTE: The below varaibles are not recommnded for converting production systems. The recommendation would be to remidiate any issues that you may have with 3rd party software prior to converting the system.
+
+.. Allow unknown Modules varaible
++
+[source,bash,role=execute]
+----
+echo "export CONVERT2RHEL_ALLOW_UNAVAILABLE_KMODS=1" >> ~/.bashrc
+----
+
+.. Skip Tainted Kernel Modules varaible
++
+[source,bash,role=execute]
+----
+echo "export CONVERT2RHEL_TAINTED_KERNEL_MODULE_CHECK_SKIP=1" >> ~/.bashrc
+----
+
+.. Skip Kernel Currencey Check varaible
++
+[source,bash,role=execute]
+----
+echo "export CONVERT2RHEL_SKIP_KERNEL_CURRENCY_CHECK=1" >> ~/.bashrc
+----
+
+.. Skip Outdated Package Check varaible
++
+[source,bash,role=execute]
+----
+echo "export CONVERT2RHEL_OUTDATED_PACKAGE_CHECK_SKIP=1" >> ~/.bashrc
+----
+
+.. Now Load the variable(s) into the active shell
++
+[source,bash,role=execute]
+----
+source ~/.bashrc
+----
+
+. In order to automate this process, you need to use activation key in the conversion command.
++
+[source,bash,role=execute]
+----
+convert2rhel --org 12451665 --activationkey convert2rhel -y
+----
++
+NOTE: This process takes some time!
+The above process ask to confirm at several steps.
+Adding a `-y` as an argument will automate the input.
+
+. Now that the conversion has been deployed successfully, you will need to reboot the system in order to put the changes into effect.
+Reboot is required because the system is now running a Red Hat Enterprise Linux Kernel `kernel-3.10.0-1160.118.1.el7.x86_64`
 
 +
-[source,sh,role=execute]
+[source,bash,role=execute]
 ----
-buildah from registry.access.redhat.com/ubi9/ubi
+reboot
+----
++
+NOTE: Your connection to the bastion will drop.
+After a few minutes, the VM should be up again.
+Try to connect again.
+
+. Access your *httpd server/bastion VM* with the following command.
++
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_command}
+----
++
+.`devops` user password
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_password}
 ----
 
-[#repositories]
-== Installing Repositories
-In this lab, you are going to containerize a software package that is already
-packaged in RPM format and stored in the Extra Packages for Enterprise Linux
-(EPEL) repository.
+. Verify the system is running on Red Hat Enterprise Linux.
++
+[source,bash,role=execute]
+----
+cat /etc/redhat-release
+----
+. Verify that the necessary Red Hat repositories are enabled.
+Also, note that none of the old CentOS repos are available.
++
+[source,bash,role=execute]
+----
+yum repolist
+----
 
-Software often has requirements for prerequisite software that must be installed
-on the machine for it to work properly.  `yum` will resolve those
-dependencies for you, as long as it can locate the required packages in
-repositories defined on the machine.  The Red Hat Universal Base Image (UBI)
-downloaded in the previous step has access to some Red Hat Enterprise Linux
-repositories.  However, the target package for the lab is from EPEL.  
-
-. In the command below, `buildah` is going to run a command on the
-`ubi-working-container` image.  The `--` indicates that the command should be
-executed from within the container, which means the results will be applied into
-the container image.  Lastly, you are providing the `yum` command to install a
-package that defines all of the repositories from EPEL, `epel-release-latest-9`.
+. Now you can review the logs from the conversion itself.
 
 +
-[source,bash]
+[source,bash,role=execute]
 ----
-buildah run ubi-working-container -- yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+less /var/log/convert2rhel/convert2rhel.log
 ----
-
-
-. You can verify that the above command did not install the RPM on the host system.
++
+NOTE: Use the down arrow key or page down key to view more of the log. 
+To close the log, simply press the "q" key for quit.
++
+. Verify the Web Application still functions by browsing to {web_app}[Sample Web App^] to verify the web app is running.
 
 +
-[source,bash]
+.Sample App still running after convert2rhel
++
+
+image::Northwind_Sample_Data.jpg[]
+
+== Remote Convert to RHEL: Convert the MySQL Host
+
+In the previous section of the lab, you excuted the conversion process effectily in a manual fashion from the command line. Using an automation tool like Ansible, we can reduce the 20 plus commands down to two commands. To start we need to install Ansible on the Web server so we can target the MySQL server.
+
+NOTE: Verify that you are still on the bastion server as root, you can use the `whoami` and `hostname` commands to ensure you are on the correct server and user. 
+If not use the steps below.
+
+Access your *httpd server VM* with the following command.
+
+[source,init,role=execute,subs=attributes+]
 ----
-rpm -q epel-release
+{web_host_ssh_command}
 ----
 
-NOTE: If your repository configurations are not distributed as an RPM, but instead as
-individual `.repo` files, you could use the `buildah copy` command to copy
-files from the host operating system into the container image.  You will see
-an example of using `buildah copy` later in this lab.
+Enter `devops` user password
 
-[#software]
-== Installing Software
+[source,init,role=execute,subs=attributes+]
+----
+{web_host_ssh_password}
+----
 
+Switch to root user.
 
-. Now that the yum repositories are defined within the container, execute 
-another `yum install`, within the container, to install the target
-software: `moon-buggy`.
+[source,bash,role=execute]
+----
+sudo -i
+----
+
+. Install EPEL and Ansible on Web Server/Bastion
++
+[source,bash,role=execute]
+----
+yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm -y
+----
+. Install Ansible and TMUX on Web Server/Bastion
++
+[source,bash,role=execute]
+----
+yum install -y ansible tmux
+----
+
+. Start `tmux` so your session doesn't detach
++
+[source,bash,role=execute]
+----
+tmux
+----
+
+. Run the playbook to set up Arc on the Mysql host
++
+[source,bash,role=execute]
+----
+ansible-playbook -v deploy_arc.yaml
+----
+
+. Run the playbook to convert the Mysql host to RHEL.
++
+[source,bash,role=execute]
+----
+ansible-playbook -v convert_to_rhel.yaml
+----
++
+NOTE: This takes just over 15 mintues.
+Keep aware of the job, and make sure that the terminal doesn't disconnect.
+It shouldn't, but you never know.
+
+. Now that the conversion has been deployed successfully, you will need to reboot the system in order to put the changes into effect.
+Reboot is required because the system is now running a Red Hat Enterprise Linux Kernel `kernel-3.10.0-1160.118.1.el7.x86_64`
 
 +
-[source,bash]
+[source,bash,role=execute]
 ----
-buildah run ubi-working-container -- yum -y install moon-buggy
+reboot
 ----
 
+== Congratulations!
 
-== Committing the Container Image
+You have converted from Centos to RHEL for both VM's. Following the optional lab below you can gain access to the Azure portal and view and manage the Arc enabled VMs from this lab.
 
-. At this point, the container is configured.  It is time to transition from a
-working container into a committed image.  In the command below, you will use
-the `buildah` command to commit the working container to an image called:
-`moon-buggy`.
+. Optional Lab: Log into Azure portal.
 
 +
-[source,bash]
-----
-buildah commit ubi-working-container moon-buggy
-----
-
+NOTE: In order to log into the Azure portal, you will need user credentials which you can obtain from lab instructors. 
+Logging into the Azure portal requires the use of MFA which for this lab requires a mobile device that can receive a SMS message.
 +
-. The output of `podman image list` should confirm the image was created.
+. Via a web browser navigate to https://portal.azure.com
+.. Login in with the username and password given to you by the lab instructors. The username should be redhatsummitlabXXX@MngEnvMCAP768372.onmicrosoft.com
+.. If you provided your phone number to one of the lab instructors, you will be prompted to use MFA and enter a code that will be sent via SMS.
 
+. Once logged into the Azure portal you can navigate to a few key areas (keep in mind your user has Read only rights)
 +
-[source,bash]
-----
-podman image list
-----
-
-
-== Deploy the Container
-
-Now the software has been installed and a new container image created.  It is
-time to spawn a runtime of the container image and validate the software.  The
-software we are using is a command line command.  
-
-. When you `run` the container,
-it will be in interactive (`-it`) mode, based on the `moon-buggy` container
-image and the command run interactively will be `/usr/bin/moon-buggy`.
-
+* Arc resource blade and find the Infrastructure section and click on Machines to find your VM's connected via Azure Arc
 +
-[source,bash]
-----
-podman run -it moon-buggy /usr/bin/moon-buggy
-----
-
+image::Azure_Arc_Portal_A.png[align=center]
 +
-[source,textinfo]
-----
-
-<<< OUTPUT ABRIDGED >>>
-               MM     MM   OOOOO    OOOOO   NN     N
-               M M   M M  O     O  O     O  N N    N
-               M  M M  M  O     O  O     O  N  N   N
-               M   M   M  O     O  O     O  N   N  N
-               M       M  O     O  O     O  N    N N
-               M       M   OOOOO    OOOOO   N     NN
-
-                     BBBBBB   U     U   GGGGG    GGGGG   Y     Y
-                     B     B  U     U  G     G  G     G   Y   Y
-                     BBBBBB   U     U  G        G          Y Y
-                     B     B  U     U  G   GGG  G   GGG     Y
-                     B     B  U     U  G     G  G     G    Y
-                     BBBBBB    UUUUU    GGGGG    GGGGG   YY
-
-<<< OUTPUT ABRIDGED >>>
-----
-
-. You can now play the Moon Buggy game, which is a text-based version of the
-popular Moon Patrol.  When you are finished, use the `q` command to quit the
-game, which will terminate the container.
-
+* Once you have chosen a specfic VM from the Mahcines list, you can deploy additional extentions sush as Custom Script Extenstion for Linux, assign polices to the VM, or enable Monitor insights which will allow you to view and create reports such as VM performance and workload network mapping.
 +
-Alternatively, you can use `podman` to kill the running container from
-*Terminal 2*.
+image::Azure_Arc_Portal_B.png[align=center]
 
-+
-[source,bash]
-----
-podman kill $(podman ps | grep -v CONTAINER | cut -f1 -d" " )
-----
+== Notes from the Field
+
+Convert2Rhel can fail to complete for a varity of reasons, such as 3rd party packages which are not offically supported by Red Hat. In some cases there will be just a simple warning that a specfic package will not be replaced during the conversion process and the converion process will still complete. It is recommneded to check to see if the package that was skipped to ensure proper operation after the conversion and the kernel is updated and loaded.
+
+In other cases the conversion process will initiate a roll back to the state it was before running the conversion. In these cases, you will need to either remidiate the issue such as removing the package, unloading the module from starting or changing enviromental variables that will skip the process in the conversion process.
+
+The most common enviromental variables (Note not recommended for production systems):
+
+** Solution 1: `echo "export CONVERT2RHEL_ALLOW_UNAVAILABLE_KMODS=1" >> ~/.bashrc; source ~/.bashrc`
+** Solution 2: `echo "export CONVERT2RHEL_TAINTED_KERNEL_MODULE_CHECK_SKIP=1" >> ~/.bashrc; source ~/.bashrc`
+** Solution 3: `echo "export CONVERT2RHEL_SKIP_KERNEL_CURRENCY_CHECK=1" >> ~/.bashrc; source ~/.bashrc`
+** Solution 4: `echo "export CONVERT2RHEL_OUTDATED_PACKAGE_CHECK_SKIP=1" >> ~/.bashrc; source ~/.bashrc`
