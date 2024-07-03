@@ -1,1 +1,1 @@
-* xref:module-01.adoc[Convert to RHEL with Azure Arc]
+* xref:index.adoc[Convert to RHEL]
